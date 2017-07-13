@@ -46,6 +46,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.DownloadListener;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -79,11 +80,13 @@ public class InAppBrowser extends CordovaPlugin {
     private static final String SYSTEM = "_system";
     private static final String EXIT_EVENT = "exit";
     private static final String LOCATION = "location";
+    private static final String TOOLBAR = "toolbar";
     private static final String ZOOM = "zoom";
     private static final String HIDDEN = "hidden";
     private static final String LOAD_START_EVENT = "loadstart";
     private static final String LOAD_STOP_EVENT = "loadstop";
     private static final String LOAD_ERROR_EVENT = "loaderror";
+    private static final String DOWNLOAD_START_EVENT = "downloadstart";
     private static final String CLEAR_ALL_CACHE = "clearcache";
     private static final String CLEAR_SESSION_CACHE = "clearsessioncache";
     private static final String HARDWARE_BACK_BUTTON = "hardwareback";
@@ -97,6 +100,7 @@ public class InAppBrowser extends CordovaPlugin {
     private EditText edittext;
     private CallbackContext callbackContext;
     private boolean showLocationBar = true;
+    private boolean showToolbar = true;
     private boolean showZoomControls = true;
     private boolean openWindowHidden = false;
     private boolean clearAllCache = false;
@@ -206,8 +210,21 @@ public class InAppBrowser extends CordovaPlugin {
                         LOG.d(LOG_TAG, "in blank");
                         result = showWebPage(url, features);
                     }
-
-                    PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, result);
+                    PluginResult pluginResult = null;
+                    //normal success
+                    if (result.isEmpty()) {
+                        pluginResult = new PluginResult(PluginResult.Status.OK, result);
+                    //else an error occured
+                    } else {
+                        try {
+                            JSONObject obj = new JSONObject();
+                            obj.put("type", LOAD_ERROR_EVENT);
+                            obj.put("url", url);
+                            pluginResult = new PluginResult(PluginResult.Status.ERROR, obj);
+                        } catch( JSONException jex) {
+                            Log.d(LOG_TAG, "Should never happen");
+                        }
+                    }
                     pluginResult.setKeepCallback(true);
                     callbackContext.sendPluginResult(pluginResult);
                 }
@@ -512,6 +529,15 @@ public class InAppBrowser extends CordovaPlugin {
     private boolean getShowLocationBar() {
         return this.showLocationBar;
     }
+    
+    /**
+     * Should we show the toolbar?
+     *
+     * @return boolean
+     */
+    private boolean getShowToolbar() {
+        return this.showToolbar;
+    }
 
     private InAppBrowser getInAppBrowser(){
         return this;
@@ -526,6 +552,7 @@ public class InAppBrowser extends CordovaPlugin {
     public String showWebPage(final String url, HashMap<String, Boolean> features) {
         // Determine if we should hide the location bar.
         showLocationBar = true;
+        showToolbar = true;
         showZoomControls = true;
         openWindowHidden = false;
         mediaPlaybackRequiresUserGesture = false;
@@ -534,6 +561,10 @@ public class InAppBrowser extends CordovaPlugin {
             Boolean show = features.get(LOCATION);
             if (show != null) {
                 showLocationBar = show.booleanValue();
+            }
+            Boolean toolbar = features.get(TOOLBAR);
+            if (toolbar != null) {
+                showToolbar = toolbar.booleanValue();
             }
             Boolean zoom = features.get(ZOOM);
             if (zoom != null) {
@@ -728,6 +759,26 @@ public class InAppBrowser extends CordovaPlugin {
                 inAppWebView = new WebView(cordova.getActivity());
                 inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
                 inAppWebView.setId(Integer.valueOf(6));
+
+                inAppWebView.setDownloadListener(new DownloadListener() {
+                    @Override
+                    public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+                        try {
+                            JSONObject obj = new JSONObject();
+                            obj.put("type", DOWNLOAD_START_EVENT);
+                            obj.put("url", url);
+                            obj.put("userAgent", userAgent);
+                            obj.put("contentDisposition", contentDisposition);
+                            obj.put("mimeType", mimetype);
+                            obj.put("contentLength", contentLength);
+
+                            sendUpdate(obj, true);
+                        } catch (JSONException ex) {
+                            Log.d(LOG_TAG, "Should never happen");
+                        }
+                    }
+                });				
+				
                 // File Chooser Implemented ChromeClient
                 inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView) {
                     // For Android 5.0+
@@ -813,6 +864,8 @@ public class InAppBrowser extends CordovaPlugin {
                 inAppWebView.setId(Integer.valueOf(6));
                 inAppWebView.getSettings().setLoadWithOverviewMode(true);
                 inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
+                inAppWebView.getSettings().setDefaultTextEncodingName("LATIN-1");
+
                 inAppWebView.requestFocus();
                 inAppWebView.requestFocusFromTouch();
 
@@ -822,11 +875,14 @@ public class InAppBrowser extends CordovaPlugin {
 
                 // Add the views to our toolbar
                 toolbar.addView(actionButtonContainer);
-                toolbar.addView(edittext);
+                // Don't show the location bar if it's been disabled
+                if (getShowLocationBar()) {
+                    toolbar.addView(edittext);
+                }
                 toolbar.addView(close);
 
                 // Don't add the toolbar if its been disabled
-                if (getShowLocationBar()) {
+                if (getShowToolbar()) {
                     // Add our toolbar to our main view/layout
                     main.addView(toolbar);
                 }
