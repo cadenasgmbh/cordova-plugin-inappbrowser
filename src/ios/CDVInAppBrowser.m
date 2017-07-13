@@ -98,16 +98,20 @@
         if ([self isSystemUrl:absoluteUrl]) {
             target = kInAppBrowserTargetSystem;
         }
-
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
         if ([target isEqualToString:kInAppBrowserTargetSelf]) {
             [self openInCordovaWebView:absoluteUrl withOptions:options];
         } else if ([target isEqualToString:kInAppBrowserTargetSystem]) {
-            [self openInSystem:absoluteUrl];
+          if (![self openInSystem:absoluteUrl]) {
+            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
+                                         messageAsDictionary:@{@"type":@"loaderror",
+                                                               @"url":url}];
+          }
         } else { // _blank or anything else
             [self openInInAppBrowser:absoluteUrl withOptions:options];
         }
 
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+      
     } else {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"incorrect number of arguments"];
     }
@@ -292,10 +296,16 @@
 #endif
 }
 
-- (void)openInSystem:(NSURL*)url
-{
-    [[NSNotificationCenter defaultCenter] postNotification:[NSNotification notificationWithName:CDVPluginHandleOpenURLNotification object:url]];
-    [[UIApplication sharedApplication] openURL:url];
+- (BOOL)openInSystem:(NSURL*)url{
+    BOOL ret = YES;
+
+    if ([[UIApplication sharedApplication] canOpenURL:url]) {
+      [[UIApplication sharedApplication] openURL:url];
+    } else { // handle any custom schemes to plugins
+      ret = NO;
+      [[NSNotificationCenter defaultCenter] postNotification:[NSNotification notificationWithName:CDVPluginHandleOpenURLNotification object:url]];
+    }
+  return ret;
 }
 
 // This is a helper method for the inject{Script|Style}{Code|File} API calls, which
