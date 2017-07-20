@@ -222,7 +222,7 @@ public class InAppBrowser extends CordovaPlugin {
                             obj.put("url", url);
                             pluginResult = new PluginResult(PluginResult.Status.ERROR, obj);
                         } catch( JSONException jex) {
-                            Log.d(LOG_TAG, "Should never happen");
+                            LOG.d(LOG_TAG, "Should never happen");
                         }
                     }
                     pluginResult.setKeepCallback(true);
@@ -774,7 +774,7 @@ public class InAppBrowser extends CordovaPlugin {
 
                             sendUpdate(obj, true);
                         } catch (JSONException ex) {
-                            Log.d(LOG_TAG, "Should never happen");
+                            LOG.d(LOG_TAG, "Should never happen");
                         }
                     }
                 });				
